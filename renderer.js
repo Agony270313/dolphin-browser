@@ -12,6 +12,10 @@ const downloadPanel = document.getElementById('download-panel');
 const downloadList = document.getElementById('download-list');
 const newtabContainer = document.getElementById('newtab-container');
 const menuDropdown = document.getElementById('menu-dropdown');
+const autocompleteDropdown = document.getElementById('address-autocomplete');
+const tabPreview = document.getElementById('tab-preview');
+const gestureOverlay = document.getElementById('gesture-overlay');
+const gestureHint = document.getElementById('gesture-hint');
 
 let bookmarks = JSON.parse(localStorage.getItem('dolphin_bookmarks') || '[]');
 
@@ -21,7 +25,8 @@ const DEFAULT_SETTINGS = {
   searchEngine: 'google',
   startup: 'newtab',
   adBlock: true,
-  saveHistory: true
+  saveHistory: true,
+  mouseGestures: true
 };
 
 function getSettings() {
@@ -39,7 +44,6 @@ function saveSettings(settings) {
 }
 
 function applySettings(settings) {
-  // Tema
   if (settings.theme === 'system') {
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
@@ -47,23 +51,23 @@ function applySettings(settings) {
     document.documentElement.setAttribute('data-theme', settings.theme);
   }
 
-  // Reklam engelleyici
   adBlockEnabled = settings.adBlock;
   const adBtn = document.getElementById('btn-adblock');
   if (adBtn) adBtn.classList.toggle('active', adBlockEnabled);
 
-  // UI'da guncelle
   const themeSel = document.getElementById('setting-theme');
   const engineSel = document.getElementById('setting-search-engine');
   const startupSel = document.getElementById('setting-startup');
   const adCheck = document.getElementById('setting-adblock');
   const histCheck = document.getElementById('setting-save-history');
+  const gestureCheck = document.getElementById('setting-mouse-gestures');
 
   if (themeSel) themeSel.value = settings.theme;
   if (engineSel) engineSel.value = settings.searchEngine;
   if (startupSel) startupSel.value = settings.startup;
   if (adCheck) adCheck.checked = settings.adBlock;
   if (histCheck) histCheck.checked = settings.saveHistory;
+  if (gestureCheck) gestureCheck.checked = settings.mouseGestures;
 }
 
 function getSearchUrl(query, engine) {
@@ -185,6 +189,7 @@ function closeAllPanels() {
     if (el) el.classList.add('hidden');
   });
   if (menuDropdown) menuDropdown.classList.add('hidden');
+  if (autocompleteDropdown) autocompleteDropdown.classList.add('hidden');
 }
 
 function openPanel(panelId) {
@@ -251,6 +256,7 @@ function performSearch(rawInput) {
   newtabContainer.classList.add('hidden');
   activeTab.webview.loadURL(url);
   addressBar.value = url;
+  autocompleteDropdown.classList.add('hidden');
 }
 
 /* ===================== NEW TAB PAGE ===================== */
@@ -318,6 +324,23 @@ function createTab(url = null, isIncognito = false) {
   webview.style.width = '100%';
   webview.style.height = '100%';
   webview.style.display = 'none';
+
+  // Audio events
+  webview.addEventListener('media-started-playing', () => {
+    const tab = tabs.find(t => t.id === tabId);
+    if (tab) {
+      tab.isPlayingAudio = true;
+      updateTabAudioIcon(tabId);
+    }
+  });
+
+  webview.addEventListener('media-paused', () => {
+    const tab = tabs.find(t => t.id === tabId);
+    if (tab) {
+      tab.isPlayingAudio = false;
+      updateTabAudioIcon(tabId);
+    }
+  });
 
   webview.addEventListener('dom-ready', () => {
     if (adBlockEnabled) {
@@ -388,21 +411,30 @@ function createTab(url = null, isIncognito = false) {
     favicon: '',
     webview: webview,
     isIncognito: isIncognito,
-    isNewTab: true
+    isNewTab: true,
+    isPlayingAudio: false
   };
   tabs.push(tab);
 
   const tabEl = document.createElement('div');
   tabEl.className = 'tab';
   tabEl.dataset.tabId = tabId;
-  tabEl.innerHTML = `<span class="tab-title">Yeni Sekme</span><span class="tab-close">&times;</span>`;
+  tabEl.innerHTML = `<span class="tab-title">Yeni Sekme</span><span class="tab-audio hidden"></span><span class="tab-close">&times;</span>`;
   tabEl.addEventListener('click', (e) => {
-    if (e.target.classList.contains('tab-close')) {
+    if (e.target.classList.contains('tab-close') || e.target.closest('.tab-close')) {
       closeTab(tabId);
+    } else if (e.target.classList.contains('tab-audio') || e.target.closest('.tab-audio')) {
+      e.stopPropagation();
+      toggleTabAudio(tabId);
     } else {
       switchTab(tabId);
     }
   });
+
+  // Tab preview events
+  tabEl.addEventListener('mouseenter', () => showTabPreview(tabId, tabEl));
+  tabEl.addEventListener('mouseleave', () => hideTabPreview());
+
   tabsContainer.appendChild(tabEl);
 
   if (url) {
@@ -480,16 +512,73 @@ function updateTabUI(tabId, loading = false) {
   }
 }
 
-function setReloadIcon(loading) {
-  const btn = document.getElementById('btn-reload');
-  if (!btn) return;
-  if (loading) {
-    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
-    btn.title = 'Durdur';
+function updateTabAudioIcon(tabId) {
+  const tab = tabs.find(t => t.id === tabId);
+  if (!tab) return;
+  const el = document.querySelector(`.tab[data-tab-id="${tabId}"]`);
+  if (!el) return;
+  const audioEl = el.querySelector('.tab-audio');
+  if (!audioEl) return;
+
+  if (tab.isPlayingAudio) {
+    audioEl.classList.remove('hidden');
+    audioEl.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>`;
+    audioEl.title = 'Sesi kapat';
   } else {
-    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>`;
-    btn.title = 'Yenile';
+    audioEl.classList.add('hidden');
+    audioEl.innerHTML = '';
   }
+}
+
+function toggleTabAudio(tabId) {
+  const tab = tabs.find(t => t.id === tabId);
+  if (!tab) return;
+  tab.webview.setAudioMuted(!tab.webview.isAudioMuted());
+  const el = document.querySelector(`.tab[data-tab-id="${tabId}"]`);
+  if (el) {
+    const audioEl = el.querySelector('.tab-audio');
+    if (audioEl) {
+      if (tab.webview.isAudioMuted()) {
+        audioEl.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`;
+        audioEl.title = 'Sesi ac';
+      } else {
+        updateTabAudioIcon(tabId);
+      }
+    }
+  }
+}
+
+/* ===================== TAB PREVIEW ===================== */
+function showTabPreview(tabId, tabEl) {
+  const tab = tabs.find(t => t.id === tabId);
+  if (!tab || tab.isNewTab) return;
+
+  const rect = tabEl.getBoundingClientRect();
+  tabPreview.querySelector('.tab-preview-title').textContent = tab.title || 'Yeni Sekme';
+  tabPreview.querySelector('.tab-preview-url').textContent = tab.url || '';
+
+  const timeEl = tabPreview.querySelector('.tab-preview-time');
+  const history = getHistory();
+  const historyItem = history.find(h => h.url === tab.url);
+  if (historyItem) {
+    const diff = Date.now() - historyItem.timestamp;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    if (minutes < 1) timeEl.textContent = 'Az once';
+    else if (minutes < 60) timeEl.textContent = `${minutes} dk once`;
+    else if (hours < 24) timeEl.textContent = `${hours} saat once`;
+    else timeEl.textContent = new Date(historyItem.timestamp).toLocaleDateString('tr-TR');
+  } else {
+    timeEl.textContent = '';
+  }
+
+  tabPreview.style.left = `${rect.left}px`;
+  tabPreview.style.top = `${rect.bottom + 4}px`;
+  tabPreview.classList.remove('hidden');
+}
+
+function hideTabPreview() {
+  tabPreview.classList.add('hidden');
 }
 
 /* ===================== AD BLOCK ===================== */
@@ -507,9 +596,300 @@ addressBar.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
     closeAllPanels();
     performSearch(addressBar.value);
+    return;
+  }
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    navigateAutocomplete(e.key === 'ArrowDown' ? 1 : -1);
+    return;
+  }
+  if (e.key === 'Escape') {
+    autocompleteDropdown.classList.add('hidden');
+    return;
   }
 });
 
+addressBar.addEventListener('input', () => {
+  renderAutocomplete(addressBar.value);
+});
+
+addressBar.addEventListener('focus', () => {
+  renderAutocomplete(addressBar.value);
+});
+
+document.addEventListener('click', (e) => {
+  if (!addressBar.contains(e.target) && !autocompleteDropdown.contains(e.target)) {
+    autocompleteDropdown.classList.add('hidden');
+  }
+});
+
+/* ===================== AUTOCOMPLETE ===================== */
+let selectedAutocompleteIndex = -1;
+
+function renderAutocomplete(query) {
+  const q = query.trim().toLowerCase();
+  const history = getHistory();
+  const topsites = getTopSites();
+  const bms = bookmarks;
+  const results = [];
+
+  if (!q) {
+    autocompleteDropdown.classList.add('hidden');
+    return;
+  }
+
+  // History matches
+  const historyMatches = history
+    .filter(h => h.title.toLowerCase().includes(q) || h.url.toLowerCase().includes(q))
+    .slice(0, 4)
+    .map(h => ({ ...h, type: 'history' }));
+
+  // Bookmark matches
+  const bookmarkMatches = bms
+    .filter(b => b.title.toLowerCase().includes(q) || b.url.toLowerCase().includes(q))
+    .slice(0, 3)
+    .map(b => ({ ...b, type: 'bookmark' }));
+
+  // Top site matches
+  const topMatches = topsites
+    .filter(s => s.title.toLowerCase().includes(q) || s.url.toLowerCase().includes(q))
+    .slice(0, 3)
+    .map(s => ({ ...s, type: 'top' }));
+
+  // Search suggestion
+  const settings = getSettings();
+  const searchUrl = getSearchUrl(query, settings.searchEngine);
+  results.push({ title: `"${query}" ara`, url: searchUrl, type: 'search' });
+
+  results.push(...historyMatches, ...bookmarkMatches, ...topMatches);
+
+  if (results.length === 0) {
+    autocompleteDropdown.classList.add('hidden');
+    return;
+  }
+
+  autocompleteDropdown.innerHTML = '';
+  selectedAutocompleteIndex = -1;
+
+  let lastType = null;
+  results.forEach((item, index) => {
+    if (item.type !== lastType && item.type !== 'search') {
+      const section = document.createElement('div');
+      section.className = 'autocomplete-section-title';
+      const labels = { history: 'Gecmis', bookmark: 'Yer Imleri', top: 'Sik Kullanilan' };
+      section.textContent = labels[item.type] || '';
+      autocompleteDropdown.appendChild(section);
+      lastType = item.type;
+    }
+
+    const el = document.createElement('div');
+    el.className = 'autocomplete-item';
+    el.dataset.index = index;
+
+    const icons = {
+      search: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
+      history: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+      bookmark: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>`,
+      top: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`
+    };
+
+    el.innerHTML = `
+      <span class="autocomplete-icon">${icons[item.type] || icons.search}</span>
+      <div class="autocomplete-info">
+        <div class="autocomplete-title">${escapeHtml(item.title)}</div>
+        <div class="autocomplete-url">${escapeHtml(item.url)}</div>
+      </div>
+      <span class="autocomplete-type">${item.type === 'search' ? 'Arama' : ''}</span>
+    `;
+
+    el.addEventListener('click', () => {
+      performSearch(item.url);
+    });
+
+    autocompleteDropdown.appendChild(el);
+  });
+
+  autocompleteDropdown.classList.remove('hidden');
+}
+
+function navigateAutocomplete(direction) {
+  const items = autocompleteDropdown.querySelectorAll('.autocomplete-item');
+  if (items.length === 0) return;
+
+  selectedAutocompleteIndex += direction;
+  if (selectedAutocompleteIndex < 0) selectedAutocompleteIndex = items.length - 1;
+  if (selectedAutocompleteIndex >= items.length) selectedAutocompleteIndex = 0;
+
+  items.forEach((item, idx) => {
+    item.classList.toggle('selected', idx === selectedAutocompleteIndex);
+  });
+
+  const selected = items[selectedAutocompleteIndex];
+  if (selected) {
+    const title = selected.querySelector('.autocomplete-title').textContent;
+    const url = selected.querySelector('.autocomplete-url').textContent;
+    if (title.startsWith('"')) {
+      addressBar.value = title.replace(/^"|" ara$/g, '');
+    } else {
+      addressBar.value = url;
+    }
+  }
+}
+
+/* ===================== KEYBOARD SHORTCUTS ===================== */
+document.addEventListener('keydown', (e) => {
+  if (!e.ctrlKey && !e.metaKey) return;
+
+  switch (e.key.toLowerCase()) {
+    case 't':
+      e.preventDefault();
+      createTab(null, incognitoMode);
+      break;
+    case 'w':
+      e.preventDefault();
+      if (activeTabId) closeTab(activeTabId);
+      break;
+    case 'r':
+      e.preventDefault();
+      document.getElementById('btn-reload').click();
+      break;
+    case 'l':
+      e.preventDefault();
+      addressBar.focus();
+      addressBar.select();
+      break;
+    case 'h':
+      e.preventDefault();
+      renderHistory();
+      openPanel('history-panel');
+      break;
+    case 'd':
+      e.preventDefault();
+      document.getElementById('btn-bookmark').click();
+      break;
+    case 'n':
+      e.preventDefault();
+      if (window.electronAPI && window.electronAPI.newWindow) {
+        window.electronAPI.newWindow();
+      }
+      break;
+    case '1': case '2': case '3': case '4': case '5':
+    case '6': case '7': case '8': case '9':
+      e.preventDefault();
+      const idx = parseInt(e.key) - 1;
+      if (tabs[idx]) switchTab(tabs[idx].id);
+      break;
+  }
+});
+
+/* ===================== MOUSE GESTURES ===================== */
+let gestureActive = false;
+let gesturePoints = [];
+let gestureCtx = null;
+
+function initGestureCanvas() {
+  gestureCtx = gestureOverlay.getContext('2d');
+  gestureOverlay.width = window.innerWidth;
+  gestureOverlay.height = window.innerHeight;
+}
+
+window.addEventListener('resize', () => {
+  if (gestureCtx) {
+    gestureOverlay.width = window.innerWidth;
+    gestureOverlay.height = window.innerHeight;
+  }
+});
+
+document.addEventListener('mousedown', (e) => {
+  const settings = getSettings();
+  if (!settings.mouseGestures) return;
+  if (e.button !== 2) return; // Right click only
+  if (e.target.closest('#top-bar') || e.target.closest('#tab-bar') || e.target.closest('#sidebar')) return;
+
+  gestureActive = true;
+  gesturePoints = [{ x: e.clientX, y: e.clientY }];
+  gestureOverlay.classList.remove('hidden');
+  if (!gestureCtx) initGestureCanvas();
+
+  gestureCtx.clearRect(0, 0, gestureOverlay.width, gestureOverlay.height);
+  gestureCtx.beginPath();
+  gestureCtx.moveTo(e.clientX, e.clientY);
+  gestureCtx.strokeStyle = 'var(--accent)';
+  gestureCtx.lineWidth = 3;
+  gestureCtx.lineCap = 'round';
+  gestureCtx.lineJoin = 'round';
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!gestureActive) return;
+  gesturePoints.push({ x: e.clientX, y: e.clientY });
+
+  gestureCtx.lineTo(e.clientX, e.clientY);
+  gestureCtx.stroke();
+
+  // Show hint based on direction
+  const gesture = detectGesture(gesturePoints);
+  if (gesture) {
+    gestureHint.classList.remove('hidden');
+    const labels = { left: 'Geri', right: 'Ileri', down: 'Yenile' };
+    gestureHint.textContent = labels[gesture] || '';
+  }
+});
+
+document.addEventListener('mouseup', (e) => {
+  if (!gestureActive) return;
+  gestureActive = false;
+  gestureOverlay.classList.add('hidden');
+  gestureHint.classList.add('hidden');
+
+  const gesture = detectGesture(gesturePoints);
+  if (!gesture) return;
+
+  const activeTab = tabs.find(t => t.id === activeTabId);
+  if (!activeTab || activeTab.isNewTab) return;
+
+  switch (gesture) {
+    case 'left':
+      if (activeTab.webview.canGoBack()) activeTab.webview.goBack();
+      break;
+    case 'right':
+      if (activeTab.webview.canGoForward()) activeTab.webview.goForward();
+      break;
+    case 'down':
+      activeTab.webview.reload();
+      break;
+  }
+});
+
+// Disable context menu during gestures
+document.addEventListener('contextmenu', (e) => {
+  const settings = getSettings();
+  if (settings.mouseGestures && gesturePoints.length > 3) {
+    e.preventDefault();
+  }
+});
+
+function detectGesture(points) {
+  if (points.length < 5) return null;
+
+  const start = points[0];
+  const end = points[points.length - 1];
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const absDx = Math.abs(dx);
+  const absDy = Math.abs(dy);
+
+  // Minimum distance threshold
+  if (absDx < 40 && absDy < 40) return null;
+
+  if (absDx > absDy) {
+    return dx > 0 ? 'right' : 'left';
+  } else {
+    return dy > 0 ? 'down' : 'up';
+  }
+}
+
+/* ===================== NAV BUTTONS ===================== */
 document.getElementById('btn-back').addEventListener('click', () => {
   const activeTab = tabs.find(t => t.id === activeTabId);
   if (activeTab && activeTab.webview.canGoBack()) activeTab.webview.goBack();
@@ -737,7 +1117,7 @@ document.getElementById('menu-settings').addEventListener('click', () => {
 
 document.getElementById('menu-about').addEventListener('click', () => {
   menuDropdown.classList.add('hidden');
-  alert('Dolphin Browser v1.0.0\nChromium tabanli modern web tarayicisi.');
+  alert('Dolphin Browser v2.0.0\nChromium tabanli modern web tarayicisi.\n\nYeni ozellikler:\n- Klavye kisayollari\n- Fare hareketleri\n- Sekme onizleme\n- Gelistirilmis adres cubugu\n- Sekme ses kontrolu');
 });
 
 document.getElementById('menu-exit').addEventListener('click', () => {
@@ -836,12 +1216,71 @@ document.getElementById('setting-save-history').addEventListener('change', (e) =
   saveSettings(settings);
 });
 
+document.getElementById('setting-mouse-gestures').addEventListener('change', (e) => {
+  const settings = getSettings();
+  settings.mouseGestures = e.target.checked;
+  saveSettings(settings);
+});
+
 document.getElementById('btn-clear-data').addEventListener('click', () => {
   if (confirm('Tum veriler (yer imleri, gecmis, ayarlar, sik kullanilanlar) silinecek. Emin misiniz?')) {
     localStorage.clear();
     alert('Tum veriler silindi. Uygulama yeniden baslatilacak.');
     location.reload();
   }
+});
+
+/* ===================== RELOAD ICON ===================== */
+function setReloadIcon(loading) {
+  const btn = document.getElementById('btn-reload');
+  if (!btn) return;
+  if (loading) {
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+    btn.title = 'Durdur';
+  } else {
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>`;
+    btn.title = 'Yenile';
+  }
+}
+
+/* ===================== AUTO UPDATE ===================== */
+const updateNotification = document.getElementById('update-notification');
+const updateMessage = document.getElementById('update-message');
+const btnInstallUpdate = document.getElementById('btn-install-update');
+const btnDismissUpdate = document.getElementById('btn-dismiss-update');
+
+if (window.electronAPI) {
+  window.electronAPI.onUpdateStatus((data) => {
+    switch (data.status) {
+      case 'available':
+        updateNotification.classList.remove('hidden');
+        updateMessage.textContent = `v${data.version} indiriliyor...`;
+        btnInstallUpdate.classList.add('hidden');
+        break;
+      case 'downloading':
+        updateNotification.classList.remove('hidden');
+        updateMessage.textContent = `v${data.version} indiriliyor... %${data.percent || 0}`;
+        btnInstallUpdate.classList.add('hidden');
+        break;
+      case 'downloaded':
+        updateNotification.classList.remove('hidden');
+        updateMessage.textContent = `v${data.version} hazir!`;
+        btnInstallUpdate.classList.remove('hidden');
+        break;
+      case 'not-available':
+      case 'error':
+        // silently ignore
+        break;
+    }
+  });
+}
+
+btnInstallUpdate.addEventListener('click', () => {
+  if (window.electronAPI) window.electronAPI.installUpdate();
+});
+
+btnDismissUpdate.addEventListener('click', () => {
+  updateNotification.classList.add('hidden');
 });
 
 /* ===================== INIT ===================== */

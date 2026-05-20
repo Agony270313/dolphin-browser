@@ -17,6 +17,7 @@
   --danger: #ef4444;
   --danger-bg: #ef444422;
   --success: #22c55e;
+  --audio: #f59e0b;
   --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
 }
 
@@ -39,6 +40,7 @@
   --danger: #dc2626;
   --danger-bg: #dc262622;
   --success: #16a34a;
+  --audio: #d97706;
 }
 
 * {
@@ -189,6 +191,7 @@ body {
   gap: 8px;
   -webkit-app-region: no-drag;
   transition: border-color 0.2s, box-shadow 0.2s;
+  position: relative;
 }
 
 .address-wrapper:focus-within {
@@ -214,6 +217,94 @@ body {
 
 #address-bar::placeholder {
   color: var(--text-muted);
+}
+
+/* ---------- Autocomplete ---------- */
+#address-autocomplete {
+  position: absolute;
+  top: 38px;
+  left: 0;
+  right: 0;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  z-index: 3000;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+#address-autocomplete.hidden {
+  display: none;
+}
+
+.autocomplete-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-primary);
+  transition: background 0.15s;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.selected {
+  background: var(--hover-bg);
+}
+
+.autocomplete-icon {
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.autocomplete-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.autocomplete-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.autocomplete-url {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.autocomplete-type {
+  font-size: 10px;
+  color: var(--accent);
+  background: var(--accent)15;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.autocomplete-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  padding: 8px 12px 4px;
 }
 
 .action-buttons {
@@ -247,6 +338,66 @@ body {
 .action-buttons button.active {
   background: var(--hover-bg);
   color: var(--accent);
+}
+
+/* ---------- Update Notification ---------- */
+#update-notification {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--accent);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 11px;
+  font-weight: 600;
+  -webkit-app-region: no-drag;
+  animation: fadeIn 0.3s ease;
+}
+
+#update-notification.hidden {
+  display: none;
+}
+
+#update-message {
+  white-space: nowrap;
+}
+
+#btn-install-update {
+  background: rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.4);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  transition: background 0.15s;
+}
+
+#btn-install-update:hover {
+  background: rgba(255,255,255,0.35);
+}
+
+#btn-dismiss-update {
+  background: transparent;
+  border: none;
+  color: white;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 2px;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+
+#btn-dismiss-update:hover {
+  opacity: 1;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* ---------- Window Controls ---------- */
@@ -387,6 +538,7 @@ body {
   border-bottom: 2px solid transparent;
   user-select: none;
   transition: background 0.15s, color 0.15s;
+  position: relative;
 }
 
 .tab:hover {
@@ -430,6 +582,21 @@ body {
   color: white;
 }
 
+.tab-audio {
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--audio);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.tab-audio:hover {
+  opacity: 0.8;
+}
+
 #btn-new-tab {
   background: transparent;
   border: none;
@@ -448,6 +615,93 @@ body {
 #btn-new-tab:hover {
   background: var(--hover-bg);
   color: var(--text-primary);
+}
+
+/* ---------- Tab Preview ---------- */
+#tab-preview {
+  position: fixed;
+  z-index: 2500;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 10px 14px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  min-width: 200px;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+
+#tab-preview.hidden {
+  display: none;
+}
+
+.tab-preview-header {
+  margin-bottom: 6px;
+}
+
+.tab-preview-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+}
+
+.tab-preview-url {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+  margin-top: 2px;
+}
+
+.tab-preview-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border-color);
+  padding-top: 6px;
+  margin-top: 6px;
+}
+
+/* ---------- Gesture Overlay ---------- */
+#gesture-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3500;
+  pointer-events: none;
+}
+
+#gesture-overlay.hidden {
+  display: none;
+}
+
+#gesture-hint {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px 24px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  z-index: 3600;
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+#gesture-hint.hidden {
+  display: none;
 }
 
 /* ---------- Icerik Alani ---------- */

@@ -11,7 +11,6 @@
     <!-- Sol Sidebar -->
     <aside id="sidebar">
       <div class="sidebar-logo" title="Dolphin Browser">
-        <!-- Dolphin Inline SVG -->
         <svg width="28" height="28" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M75 65C70 75 55 85 40 80C30 77 20 65 18 50C16 35 28 20 45 15C55 12 65 18 70 25C72 28 75 30 80 28C82 27 85 28 87 30C88 32 87 34 85 35C80 38 75 45 78 52C80 58 78 62 75 65Z" fill="currentColor"/>
           <circle cx="62" cy="28" r="3" fill="var(--bg-secondary)"/>
@@ -64,6 +63,7 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           </span>
           <input type="text" id="address-bar" placeholder="Dolphin Search ile ara..." autocomplete="off">
+          <div id="address-autocomplete" class="hidden"></div>
         </div>
         <div class="action-buttons">
           <button id="btn-bookmark" title="Yer Imi Ekle">
@@ -78,6 +78,11 @@
           <button id="btn-menu" title="Menu">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
           </button>
+        </div>
+        <div id="update-notification" class="hidden">
+          <span id="update-message"></span>
+          <button id="btn-install-update" class="hidden">Guncelle ve Yeniden Baslat</button>
+          <button id="btn-dismiss-update">&times;</button>
         </div>
         <div class="window-controls">
           <button id="btn-minimize" title="Kucult">
@@ -123,6 +128,21 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </button>
       </div>
+
+      <!-- Sekme Onizleme -->
+      <div id="tab-preview" class="hidden">
+        <div class="tab-preview-header">
+          <div class="tab-preview-title"></div>
+          <div class="tab-preview-url"></div>
+        </div>
+        <div class="tab-preview-info">
+          <span class="tab-preview-time"></span>
+        </div>
+      </div>
+
+      <!-- Fare Hareketleri Overlay -->
+      <canvas id="gesture-overlay" class="hidden"></canvas>
+      <div id="gesture-hint" class="hidden"></div>
 
       <!-- Icerik Alani -->
       <div id="content-area">
@@ -211,13 +231,23 @@
                 <span class="toggle-slider"></span>
               </label>
             </div>
+            <div class="setting-row toggle-row">
+              <div>
+                <label for="setting-mouse-gestures">Fare hareketleri</label>
+                <span class="setting-desc">Saga/sola surukleme ile geri/ileri</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="setting-mouse-gestures" checked>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
           </div>
           <div class="settings-section">
             <h4>Veriler</h4>
             <button id="btn-clear-data" class="danger-btn">Tum Verileri Temizle</button>
           </div>
           <div class="settings-footer">
-            <span>Dolphin Browser v1.0.0</span>
+            <span>Dolphin Browser v2.0.0</span>
           </div>
         </div>
       </div>

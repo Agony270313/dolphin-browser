@@ -1,14 +1,14 @@
 {
   "name": "dolphin-browser",
-  "version": "1.0.0",
-  "description": "Hizli ve guvenli Chromium tabanli Dolphin Browser",
+  "version": "2.0.0",
+  "description": "Hizli ve guvenli Chromium tabanli Dolphin Browser v2.0",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "build": "electron-builder --win"
   },
   "devDependencies": {
-    "electron": "^25.9.0",
+    "electron": "^42.2.0",
     "electron-builder": "^24.6.4"
   },
   "build": {
@@ -27,6 +27,14 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Agony270313",
+      "repo": "dolphin-browser"
     }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.3"
   }
 }

@@ -1,8 +1,13 @@
 const { app, BrowserWindow, ipcMain, session, dialog, shell } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 
 let mainWindow;
 const downloads = new Map();
+
+// Auto updater logging
+autoUpdater.logger = require('electron-log');
+autoUpdater.logger.transports.file.level = 'info';
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -23,6 +28,14 @@ function createWindow() {
   });
 
   mainWindow.loadFile('index.html');
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+    // Check for updates after window is shown
+    setTimeout(() => {
+      autoUpdater.checkForUpdatesAndNotify().catch(() => {});
+    }, 3000);
+  });
 
   session.defaultSession.on('will-download', (event, item, webContents) => {
     const id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
@@ -65,6 +78,31 @@ function createWindow() {
     if (mainWindow) mainWindow.webContents.send('window-maximized', false);
   });
 }
+
+// Auto Updater Events
+autoUpdater.on('checking-for-update', () => {
+  if (mainWindow) mainWindow.webContents.send('update-status', { status: 'checking' });
+});
+
+autoUpdater.on('update-available', (info) => {
+  if (mainWindow) mainWindow.webContents.send('update-status', { status: 'available', version: info.version });
+});
+
+autoUpdater.on('update-not-available', () => {
+  if (mainWindow) mainWindow.webContents.send('update-status', { status: 'not-available' });
+});
+
+autoUpdater.on('download-progress', (progress) => {
+  if (mainWindow) mainWindow.webContents.send('update-status', { status: 'downloading', percent: Math.round(progress.percent) });
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  if (mainWindow) mainWindow.webContents.send('update-status', { status: 'downloaded', version: info.version });
+});
+
+autoUpdater.on('error', (err) => {
+  if (mainWindow) mainWindow.webContents.send('update-status', { status: 'error', message: err.message });
+});
 
 app.whenReady().then(createWindow);
 
@@ -114,4 +152,12 @@ ipcMain.handle('is-maximized', () => {
 
 ipcMain.on('new-window', () => {
   createWindow();
+});
+
+ipcMain.on('install-update', () => {
+  autoUpdater.quitAndInstall(false, true);
+});
+
+ipcMain.on('check-for-updates', () => {
+  autoUpdater.checkForUpdatesAndNotify().catch(() => {});
 });
