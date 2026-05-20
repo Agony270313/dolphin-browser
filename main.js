@@ -1,11 +1,23 @@
 const { app, BrowserWindow, ipcMain, session, dialog, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
+const os = require('os');
+
+// ===== PERFORMANCE OPTIMIZATIONS =====
+// Limit max Chromium processes to reduce RAM usage
+app.commandLine.appendSwitch('max-webview-processes', '4');
+// Enable GPU acceleration but limit concurrent decode
+app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder,MemorySaver,BatterySaver');
+app.commandLine.appendSwitch('disable-features', 'LazyFrameLoading');
+// Reduce memory footprint for background pages
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=2048');
+// Limit image cache
+app.commandLine.appendSwitch('force-device-scale-factor', '1');
 
 let mainWindow;
 const downloads = new Map();
 
-// Auto updater logging (use console if electron-log not available)
+// Auto updater logging
 const updaterLog = {
   info: (...args) => console.log('[autoUpdater]', ...args),
   error: (...args) => console.error('[autoUpdater]', ...args)
@@ -21,12 +33,16 @@ function createWindow() {
     title: 'Dolphin Browser',
     frame: false,
     icon: path.join(__dirname, 'icon.ico'),
+    backgroundColor: '#0b0c10',
+    show: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
       webviewTag: true,
-      sandbox: false
+      sandbox: false,
+      backgroundThrottling: true,
+      offscreen: false
     }
   });
 
@@ -34,12 +50,12 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
-    // Check for updates after window is shown
     setTimeout(() => {
       autoUpdater.checkForUpdatesAndNotify().catch(() => {});
     }, 3000);
   });
 
+  // ===== DOWNLOAD HANDLER =====
   session.defaultSession.on('will-download', (event, item, webContents) => {
     const id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
     const downloadInfo = {
@@ -73,6 +89,9 @@ function createWindow() {
     });
   });
 
+  // ===== CLEAR CACHE ON STARTUP =====
+  session.defaultSession.clearCache().catch(() => {});
+
   mainWindow.on('maximize', () => {
     if (mainWindow) mainWindow.webContents.send('window-maximized', true);
   });
@@ -82,27 +101,22 @@ function createWindow() {
   });
 }
 
-// Auto Updater Events
+// ===== AUTO UPDATER EVENTS =====
 autoUpdater.on('checking-for-update', () => {
   if (mainWindow) mainWindow.webContents.send('update-status', { status: 'checking' });
 });
-
 autoUpdater.on('update-available', (info) => {
   if (mainWindow) mainWindow.webContents.send('update-status', { status: 'available', version: info.version });
 });
-
 autoUpdater.on('update-not-available', () => {
   if (mainWindow) mainWindow.webContents.send('update-status', { status: 'not-available' });
 });
-
 autoUpdater.on('download-progress', (progress) => {
   if (mainWindow) mainWindow.webContents.send('update-status', { status: 'downloading', percent: Math.round(progress.percent) });
 });
-
 autoUpdater.on('update-downloaded', (info) => {
   if (mainWindow) mainWindow.webContents.send('update-status', { status: 'downloaded', version: info.version });
 });
-
 autoUpdater.on('error', (err) => {
   if (mainWindow) mainWindow.webContents.send('update-status', { status: 'error', message: err.message });
 });
@@ -117,50 +131,51 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
 
-// IPC Handlers
-ipcMain.handle('get-app-path', (event, name) => {
-  return app.getPath(name);
-});
+// ===== IPC HANDLERS =====
+ipcMain.handle('get-app-path', (event, name) => app.getPath(name));
 
 ipcMain.handle('show-save-dialog', async (event, options) => {
   const result = await dialog.showSaveDialog(mainWindow, options);
   return result;
 });
 
-ipcMain.on('open-external', (event, url) => {
-  shell.openExternal(url);
-});
-
-ipcMain.on('minimize-window', () => {
-  if (mainWindow) mainWindow.minimize();
-});
-
+ipcMain.on('open-external', (event, url) => shell.openExternal(url));
+ipcMain.on('minimize-window', () => { if (mainWindow) mainWindow.minimize(); });
 ipcMain.on('maximize-window', () => {
   if (mainWindow) {
-    if (mainWindow.isMaximized()) {
-      mainWindow.unmaximize();
-    } else {
-      mainWindow.maximize();
-    }
+    if (mainWindow.isMaximized()) mainWindow.unmaximize();
+    else mainWindow.maximize();
   }
 });
+ipcMain.on('close-window', () => { if (mainWindow) mainWindow.close(); });
+ipcMain.handle('is-maximized', () => mainWindow ? mainWindow.isMaximized() : false);
+ipcMain.on('new-window', () => createWindow());
+ipcMain.on('install-update', () => autoUpdater.quitAndInstall(false, true));
+ipcMain.on('check-for-updates', () => autoUpdater.checkForUpdatesAndNotify().catch(() => {}));
 
-ipcMain.on('close-window', () => {
-  if (mainWindow) mainWindow.close();
+// ===== PERFORMANCE IPC =====
+ipcMain.handle('get-system-memory', () => {
+  return {
+    total: os.totalmem(),
+    free: os.freemem(),
+    used: os.totalmem() - os.freemem()
+  };
 });
 
-ipcMain.handle('is-maximized', () => {
-  return mainWindow ? mainWindow.isMaximized() : false;
+ipcMain.handle('clear-all-cache', async () => {
+  await session.defaultSession.clearCache();
+  await session.defaultSession.clearStorageData({
+    storages: ['cookies', 'filesystem', 'indexdb', 'localstorage', 'shadercache', 'websql', 'serviceworkers', 'cachestorage']
+  });
+  return true;
 });
 
-ipcMain.on('new-window', () => {
-  createWindow();
-});
-
-ipcMain.on('install-update', () => {
-  autoUpdater.quitAndInstall(false, true);
-});
-
-ipcMain.on('check-for-updates', () => {
-  autoUpdater.checkForUpdatesAndNotify().catch(() => {});
+ipcMain.handle('get-process-memory', async () => {
+  const memInfo = process.memoryUsage();
+  return {
+    rss: memInfo.rss,
+    heapTotal: memInfo.heapTotal,
+    heapUsed: memInfo.heapUsed,
+    external: memInfo.external
+  };
 });

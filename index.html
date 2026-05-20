@@ -243,11 +243,54 @@
             </div>
           </div>
           <div class="settings-section">
+            <h4>Performans</h4>
+            <div class="setting-row toggle-row">
+              <div>
+                <label for="setting-tab-discard">Sekme askiya alma</label>
+                <span class="setting-desc">Uzun sure kullanilmayan sekmeleri uyku moduna alir</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="setting-tab-discard" checked>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="setting-row toggle-row">
+              <div>
+                <label for="setting-background-throttle">Arka plan kisitlamasi</label>
+                <span class="setting-desc">Arka plan sekmelerinin CPU kullanimini azaltir</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="setting-background-throttle" checked>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="setting-row toggle-row">
+              <div>
+                <label for="setting-auto-cleanup">Otomatik bellek temizligi</label>
+                <span class="setting-desc">Her 30 dakikada bir gecmis onbellegi temizler</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="setting-auto-cleanup" checked>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="setting-row performance-row">
+              <div>
+                <label>Bellek Kullanimi</label>
+                <span class="setting-desc" id="memory-usage-text">Hesaplaniyor...</span>
+              </div>
+            </div>
+            <div class="performance-actions">
+              <button id="btn-clear-cache" class="panel-action">Onbellegi Temizle</button>
+              <button id="btn-optimize-memory" class="panel-action">Bellek Optimize Et</button>
+            </div>
+          </div>
+          <div class="settings-section">
             <h4>Veriler</h4>
             <button id="btn-clear-data" class="danger-btn">Tum Verileri Temizle</button>
           </div>
           <div class="settings-footer">
-            <span>Dolphin Browser v2.0.0</span>
+            <span>Dolphin Browser v2.2.0</span>
           </div>
         </div>
       </div>

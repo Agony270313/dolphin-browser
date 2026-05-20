@@ -1158,6 +1158,35 @@ input:checked + .toggle-slider:before {
   font-size: 12px;
 }
 
+/* ---------- Performance Actions ---------- */
+.performance-row {
+  padding: 6px 0;
+}
+
+.performance-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.performance-actions .panel-action {
+  flex: 1;
+  text-align: center;
+  padding: 6px 10px;
+  font-size: 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.performance-actions .panel-action:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
 /* ---------- Indirme Paneli ---------- */
 #download-panel {
   position: absolute;

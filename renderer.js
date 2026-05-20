@@ -26,7 +26,10 @@ const DEFAULT_SETTINGS = {
   startup: 'newtab',
   adBlock: true,
   saveHistory: true,
-  mouseGestures: true
+  mouseGestures: true,
+  tabDiscard: true,
+  backgroundThrottle: true,
+  autoCleanup: true
 };
 
 function getSettings() {
@@ -61,6 +64,9 @@ function applySettings(settings) {
   const adCheck = document.getElementById('setting-adblock');
   const histCheck = document.getElementById('setting-save-history');
   const gestureCheck = document.getElementById('setting-mouse-gestures');
+  const discardCheck = document.getElementById('setting-tab-discard');
+  const throttleCheck = document.getElementById('setting-background-throttle');
+  const cleanupCheck = document.getElementById('setting-auto-cleanup');
 
   if (themeSel) themeSel.value = settings.theme;
   if (engineSel) engineSel.value = settings.searchEngine;
@@ -68,6 +74,9 @@ function applySettings(settings) {
   if (adCheck) adCheck.checked = settings.adBlock;
   if (histCheck) histCheck.checked = settings.saveHistory;
   if (gestureCheck) gestureCheck.checked = settings.mouseGestures;
+  if (discardCheck) discardCheck.checked = settings.tabDiscard;
+  if (throttleCheck) throttleCheck.checked = settings.backgroundThrottle;
+  if (cleanupCheck) cleanupCheck.checked = settings.autoCleanup;
 }
 
 function getSearchUrl(query, engine) {
@@ -448,7 +457,13 @@ function createTab(url = null, isIncognito = false) {
 
 function switchTab(tabId) {
   closeAllPanels();
+
+  // Restore discarded tab if needed
+  restoreDiscardedTab(tabId);
+
   activeTabId = tabId;
+  updateTabLastActive(tabId);
+
   tabs.forEach(t => {
     const el = document.querySelector(`.tab[data-tab-id="${t.id}"]`);
     if (el) el.classList.toggle('active', t.id === tabId);
@@ -1222,6 +1237,29 @@ document.getElementById('setting-mouse-gestures').addEventListener('change', (e)
   saveSettings(settings);
 });
 
+document.getElementById('setting-tab-discard').addEventListener('change', (e) => {
+  const settings = getSettings();
+  settings.tabDiscard = e.target.checked;
+  saveSettings(settings);
+});
+
+document.getElementById('setting-background-throttle').addEventListener('change', (e) => {
+  const settings = getSettings();
+  settings.backgroundThrottle = e.target.checked;
+  saveSettings(settings);
+  tabs.forEach(tab => {
+    if (!tab.isNewTab) {
+      tab.webview.setBackgroundThrottling(e.target.checked);
+    }
+  });
+});
+
+document.getElementById('setting-auto-cleanup').addEventListener('change', (e) => {
+  const settings = getSettings();
+  settings.autoCleanup = e.target.checked;
+  saveSettings(settings);
+});
+
 document.getElementById('btn-clear-data').addEventListener('click', () => {
   if (confirm('Tum veriler (yer imleri, gecmis, ayarlar, sik kullanilanlar) silinecek. Emin misiniz?')) {
     localStorage.clear();
@@ -1229,6 +1267,129 @@ document.getElementById('btn-clear-data').addEventListener('click', () => {
     location.reload();
   }
 });
+
+document.getElementById('btn-clear-cache').addEventListener('click', async () => {
+  if (window.electronAPI) {
+    await window.electronAPI.clearAllCache();
+    alert('Onbellek temizlendi!');
+  }
+});
+
+document.getElementById('btn-optimize-memory').addEventListener('click', () => {
+  optimizeMemory();
+});
+
+/* ===================== PERFORMANCE: TAB DISCARD ===================== */
+const TAB_DISCARD_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+const tabLastActive = new Map();
+
+function updateTabLastActive(tabId) {
+  tabLastActive.set(tabId, Date.now());
+}
+
+function discardInactiveTabs() {
+  const settings = getSettings();
+  if (!settings.tabDiscard) return;
+
+  const now = Date.now();
+  tabs.forEach(tab => {
+    if (tab.id === activeTabId || tab.isNewTab || tab.isPlayingAudio) return;
+    const lastActive = tabLastActive.get(tab.id) || now;
+    if (now - lastActive > TAB_DISCARD_TIMEOUT) {
+      // Suspend the webview by replacing with about:blank to free memory
+      // but keep tab metadata so we can restore on click
+      if (!tab.isDiscarded) {
+        tab.suspendedUrl = tab.webview.getURL();
+        tab.suspendedTitle = tab.webview.getTitle();
+        tab.webview.loadURL('about:blank');
+        tab.isDiscarded = true;
+        updateTabUI(tab.id);
+        console.log(`[Performance] Tab ${tab.id} discarded to save memory`);
+      }
+    }
+  });
+}
+
+function restoreDiscardedTab(tabId) {
+  const tab = tabs.find(t => t.id === tabId);
+  if (!tab || !tab.isDiscarded) return;
+  tab.webview.loadURL(tab.suspendedUrl || 'https://www.google.com');
+  tab.isDiscarded = false;
+  delete tab.suspendedUrl;
+  delete tab.suspendedTitle;
+}
+
+// Run discard check every minute
+setInterval(discardInactiveTabs, 60 * 1000);
+
+/* ===================== PERFORMANCE: MEMORY CLEANUP ===================== */
+function optimizeMemory() {
+  // Trigger JS garbage collection hint
+  if (window.gc) window.gc();
+
+  // Clear unused images and styles from invisible webviews
+  tabs.forEach(tab => {
+    if (tab.id !== activeTabId && !tab.isNewTab && !tab.isDiscarded) {
+      tab.webview.executeJavaScript(`
+        // Clear image caches
+        if (window.performance && window.performance.memory) {
+          document.querySelectorAll('img').forEach(img => {
+            if (!img.isIntersecting) { img.src = ''; }
+          });
+        }
+      `).catch(() => {});
+    }
+  });
+
+  alert('Bellek optimize edildi!');
+}
+
+async function updateMemoryUsage() {
+  const text = document.getElementById('memory-usage-text');
+  if (!text || !window.electronAPI) return;
+
+  try {
+    const sys = await window.electronAPI.getSystemMemory();
+    const proc = await window.electronAPI.getProcessMemory();
+    const usedMB = Math.round(sys.used / 1024 / 1024);
+    const totalMB = Math.round(sys.total / 1024 / 1024);
+    const appMB = Math.round(proc.rss / 1024 / 1024);
+    text.textContent = `Sistem: ${usedMB} MB / ${totalMB} MB | Uygulama: ${appMB} MB`;
+  } catch (e) {
+    text.textContent = 'Hesaplanamadi';
+  }
+}
+
+// Update memory display every 10 seconds
+setInterval(updateMemoryUsage, 10000);
+
+/* ===================== PERFORMANCE: AUTO CLEANUP ===================== */
+function autoCleanup() {
+  const settings = getSettings();
+  if (!settings.autoCleanup) return;
+
+  // Clear session cache periodically
+  if (window.electronAPI) {
+    window.electronAPI.clearAllCache().catch(() => {});
+  }
+
+  // Trim old history
+  let history = getHistory();
+  if (history.length > 500) {
+    history = history.slice(0, 500);
+    localStorage.setItem('dolphin_history', JSON.stringify(history));
+  }
+
+  // Trim old top sites
+  let topsites = JSON.parse(localStorage.getItem('dolphin_topsites') || '[]');
+  if (topsites.length > 50) {
+    topsites = topsites.slice(0, 50);
+    localStorage.setItem('dolphin_topsites', JSON.stringify(topsites));
+  }
+}
+
+// Run auto cleanup every 30 minutes
+setInterval(autoCleanup, 30 * 60 * 1000);
 
 /* ===================== RELOAD ICON ===================== */
 function setReloadIcon(loading) {

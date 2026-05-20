@@ -22,4 +22,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removeUpdateListeners: () => ipcRenderer.removeAllListeners('update-status'),
   installUpdate: () => ipcRenderer.send('install-update'),
   checkForUpdates: () => ipcRenderer.send('check-for-updates'),
+
+  // Performance APIs
+  getSystemMemory: () => ipcRenderer.invoke('get-system-memory'),
+  getProcessMemory: () => ipcRenderer.invoke('get-process-memory'),
+  clearAllCache: () => ipcRenderer.invoke('clear-all-cache'),
 });
