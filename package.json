@@ -1,0 +1,32 @@
+{
+  "name": "dolphin-browser",
+  "version": "1.0.0",
+  "description": "Hizli ve guvenli Chromium tabanli Dolphin Browser",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^25.9.0",
+    "electron-builder": "^24.6.4"
+  },
+  "build": {
+    "appId": "com.dolphin.browser",
+    "productName": "Dolphin Browser",
+    "icon": "icon.png",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}
