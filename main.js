@@ -5,9 +5,12 @@ const path = require('path');
 let mainWindow;
 const downloads = new Map();
 
-// Auto updater logging
-autoUpdater.logger = require('electron-log');
-autoUpdater.logger.transports.file.level = 'info';
+// Auto updater logging (use console if electron-log not available)
+const updaterLog = {
+  info: (...args) => console.log('[autoUpdater]', ...args),
+  error: (...args) => console.error('[autoUpdater]', ...args)
+};
+autoUpdater.logger = updaterLog;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
